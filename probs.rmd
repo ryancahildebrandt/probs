@@ -1,0 +1,110 @@
+---
+title: "Probs"
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+  html_notebook:
+    toc: yes
+---
+
+# Imports
+
+```{r message=FALSE, warning=FALSE}
+library(rstan)
+library(rstanarm)
+library(datasets)
+library(stats)
+library(bayesplot)
+```
+
+# Data
+
+```{r message=FALSE, warning=FALSE}
+orange <- datasets::Orange
+orange$circumference <- as.numeric(orange$circumference)
+```
+
+# GLM, Identity Link Function
+
+```{r}
+x <- orange$age
+y <- orange$circumference
+data <- list(x = x, y = y, N = length(x))
+
+plot(data$x, data$y)
+glm(y ~ x, data = data)
+```
+
+```{r}
+mdl <- rstan::stan(file = "glm_nolink.stan", data = data)
+```
+
+```{r}
+mdl <- rstanarm::stan_glm(y ~ x, data = data.frame(data))
+```
+
+# GLM, Specify Link Function
+
+```{r}
+x <- orange$age
+y <- as.numeric(orange$circumference > 100)
+data <- list(x = x, y = y, N = length(x))
+
+plot(data$x, data$y)
+glm(y ~ x, data = data)
+```
+
+```{r}
+mdl <- rstan::stan(file = "glm_link.stan", data = data)
+```
+
+```{r}
+mdl <- rstanarm::stan_glm(y ~ x, data = data.frame(data), family = binomial(link = "logit"))
+```
+
+# AB Split Testing
+
+```{r}
+x1 <- orange$age[orange$circumference < 100]
+x2 <- orange$age[orange$circumference > 100]
+data <- list(x1 = x1, x2 = x2, N1 = length(x1), N2 = length(x2))
+
+plot(density(data$x1))
+plot(density(data$x2))
+t.test(data$x1, data$x2)
+```
+
+```{r}
+mdl <- rstan::stan(file = "ab_split.stan", data = data)
+```
+
+```{r}
+x <- orange$age
+y <- as.numeric(orange$circumference > 100)
+data <- list(x = x, y = y)
+
+mdl <- rstanarm::stan_glm(y ~ 0 + x, data = data.frame(data), family = gaussian(link = "identity"))
+```
+
+# GMM Gaussian Mixture Model
+
+```{r}
+x <- orange$age
+data <- list(x = x, N = length(x), K = 2)
+
+plot(density(data$x))
+```
+
+```{r}
+mdl <- rstan::stan(file = "gmm.stan", data = data)
+```
+
+# Viz
+
+```{r Viz}
+samples <- as.array(mdl)
+mcmc_hist(samples)
+mcmc_dens_overlay(samples)
+mcmc_trace(samples)
+```
